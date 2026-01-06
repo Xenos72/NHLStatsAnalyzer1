@@ -445,4 +445,53 @@ if st.session_state.players:
             else:
                 # Line Chart
                 if not all_dfs:
-                    st.warning("No game data available for selected pa
+                    st.warning("No game data available for selected parameters.")
+                else:
+                    fig = go.Figure()
+                    
+                    for i, df in enumerate(all_dfs):
+                        # Main Line
+                        fig.add_trace(go.Scatter(
+                            x=df['game_number'],
+                            y=df['y_final'],
+                            mode='lines',
+                            name=f"{df['player_name'][0]} ({df['season_label'][0]})",
+                            line=dict(color=df['color'][0], width=3)
+                        ))
+                        
+                        # Rolling Line (if projection)
+                        if mode_key == 'projection':
+                            fig.add_trace(go.Scatter(
+                                x=df['game_number'],
+                                y=df['y_rolling'],
+                                mode='lines',
+                                name=f"{df['player_name'][0]} (Rolling)",
+                                line=dict(color=df['color'][0], width=1, dash='dash'),
+                                opacity=0.7
+                            ))
+
+                    fig.update_layout(
+                        title=f"{selected_label} - {view_mode}",
+                        xaxis_title="Game Number",
+                        yaxis_title=f"{selected_label} ({selected_unit})" if selected_unit else selected_label,
+                        hovermode="x unified",
+                        height=500,
+                        template="plotly_dark",
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Data explorer expander
+                    with st.expander("View Raw Data"):
+                        combined = pd.concat(all_dfs)[['player_name', 'game_number', 'y_final', 'y_rolling'] if mode_key == 'projection' else ['player_name', 'game_number', 'y_final']]
+                        st.dataframe(combined, use_container_width=True)
+
+else:
+    st.info("Please search and add players to begin.")
