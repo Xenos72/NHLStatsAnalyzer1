@@ -16,7 +16,7 @@ st.set_page_config(
 BASE_URL = "https://api-web.nhle.com/v1"
 SEARCH_URL = "https://search.d3.nhle.com/api/v1/search/player"
 
-# Metrics Definition
+# Final Metric List
 METRIC_OPTIONS = {
     'cumulative': {
         'points': {'label': 'Points', 'unit': ''},
@@ -34,7 +34,7 @@ METRIC_OPTIONS = {
         'shootingPct': {'label': 'Shooting %', 'unit': '%'},
         'toi': {'label': 'Avg Time On Ice', 'unit': 'm'},
         'esToi': {'label': 'Avg Even Strength TOI', 'unit': 'm'},
-        'evenStrengthPct': {'label': 'Even Strength % of Prod', 'unit': '%'},
+        'evenStrengthPct': {'label': 'Even Strength % of Prod', 'unit': '%'}, 
         'plusMinus': {'label': 'Plus/Minus', 'unit': ''}
     },
     'distribution': {
@@ -163,7 +163,8 @@ with st.expander("Player Selection", expanded=True if not st.session_state.playe
                 with col_res:
                     st.write(f"**{p['name']}** ({p['teamAbbrev']})")
                 with col_btn:
-                    if st.button("Add", key=f"add_{p['playerId']}_{datetime.now()}"):
+                    # FIX: Removed datetime.now() from key to ensure stability
+                    if st.button("Add", key=f"add_{p['playerId']}"):
                         add_player(p)
                         st.rerun()
 
