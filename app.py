@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime
 
 # --- Configuration ---
@@ -18,7 +17,7 @@ BASE_URL = "https://api-web.nhle.com/v1"
 SEARCH_URL = "https://search.d3.nhle.com/api/v1/search/player"
 
 # Metrics Definition
-METRICS = {
+METRIC_OPTIONS = {
     'cumulative': {
         'points': {'label': 'Points', 'unit': ''},
         'goals': {'label': 'Goals', 'unit': ''},
@@ -99,7 +98,7 @@ def get_game_log(player_id, season):
 
 # --- Session State ---
 if 'players' not in st.session_state:
-    st.session_state.players = [] # List of dicts: {id, name, team, selected_season, available_seasons, color_idx}
+    st.session_state.players = [] 
 
 def add_player(player_data):
     if len(st.session_state.players) >= 3:
@@ -114,9 +113,7 @@ def add_player(player_data):
 
     seasons = []
     if 'seasonTotals' in details:
-        # Filter for NHL Regular Season (gameTypeId == 2)
         nhl_seasons = [s for s in details['seasonTotals'] if s['leagueAbbrev'] == 'NHL' and s['gameTypeId'] == 2]
-        # Get unique seasons sorted desc
         seen = set()
         for s in nhl_seasons:
             if s['season'] not in seen:
@@ -125,7 +122,6 @@ def add_player(player_data):
         seasons.sort(reverse=True)
     
     if not seasons:
-        # Fallback
         seasons = [details.get('seasonId', 20232024)]
 
     st.session_state.players.append({
@@ -135,12 +131,11 @@ def add_player(player_data):
         'selected_season': seasons[0],
         'available_seasons': seasons,
         'color_idx': len(st.session_state.players),
-        'instance_id': datetime.now().timestamp() # Unique ID for duplicates
+        'instance_id': datetime.now().timestamp()
     })
 
 def remove_player(idx):
     st.session_state.players.pop(idx)
-    # Re-assign colors
     for i, p in enumerate(st.session_state.players):
         p['color_idx'] = i
 
@@ -152,18 +147,16 @@ st.caption("A Xenos app based on live NHL API data")
 # 1. Sidebar / Top Controls
 with st.expander("Player Selection", expanded=True if not st.session_state.players else False):
     
-    # Search
     c1, c2 = st.columns([3, 1])
     with c1:
         search_q = st.text_input("Search Player (e.g. MacKinnon)", key="search_box")
     with c2:
-        st.write("") # Spacer
+        st.write("") 
         st.write("") 
         
     if len(search_q) >= 3:
         results = search_player(search_q)
         if results:
-            # Create a nice list of buttons
             st.markdown("### Results")
             for p in results:
                 col_res, col_btn = st.columns([4, 1])
@@ -174,7 +167,6 @@ with st.expander("Player Selection", expanded=True if not st.session_state.playe
                         add_player(p)
                         st.rerun()
 
-    # Active Players List
     if st.session_state.players:
         st.markdown("---")
         st.subheader("Selected Players")
@@ -217,19 +209,16 @@ with col_mode:
         ['Cumulative', '82-Gm Pace', 'Distribution'], 
         horizontal=True
     )
-    # Convert to key used in config
     mode_key = 'cumulative'
     if 'Pace' in view_mode: mode_key = 'projection'
     elif 'Distribution' in view_mode: mode_key = 'distribution'
 
 with col_metric:
-    # Get options based on mode
     options = METRIC_OPTIONS[mode_key]
     metric_keys = list(options.keys())
     metric_labels = [options[k]['label'] for k in metric_keys]
     
     selected_label = st.selectbox("Metric", metric_labels)
-    # Find ID from label
     selected_metric_id = next(k for k, v in options.items() if v['label'] == selected_label)
     selected_unit = options[selected_metric_id]['unit']
 
@@ -248,23 +237,18 @@ if st.session_state.players:
                 
                 if log and 'gameLog' in log:
                     df = pd.DataFrame(log['gameLog'])
-                    # Sort by date
                     df['date_obj'] = pd.to_datetime(df['gameDate'])
                     df = df.sort_values('date_obj').reset_index(drop=True)
                     df['game_number'] = df.index + 1
                     
-                    # Pre-calculations for metrics
-                    # Parse TOI
                     df['toi_val'] = df['toi'].apply(parse_toi)
                     df['pp_toi_val'] = df.get('powerPlayToi', pd.Series(['00:00']*len(df))).apply(parse_toi)
                     df['sh_toi_val'] = df.get('shorthandedToi', pd.Series(['00:00']*len(df))).apply(parse_toi)
                     
-                    # Handle missing cols
                     for col in ['goals', 'assists', 'points', 'shots', 'plusMinus', 'powerPlayPoints', 'shorthandedPoints', 'powerPlayGoals', 'shorthandedGoals']:
                         if col not in df.columns:
                             df[col] = 0
 
-                    # --- Distribution Logic ---
                     if mode_key == 'distribution':
                         totals = {
                             'goals': df['goals'].sum(),
@@ -276,7 +260,6 @@ if st.session_state.players:
                             'sh_points': df['shorthandedPoints'].sum(),
                             'es_goals': df['goals'].sum() - df['powerPlayGoals'].sum() - df['shorthandedGoals'].sum(),
                             'es_points': df['points'].sum() - df['powerPlayPoints'].sum() - df['shorthandedPoints'].sum(),
-                            # Assists breakdown
                             'pp_assists': (df['powerPlayPoints'].sum() - df['powerPlayGoals'].sum()),
                             'sh_assists': (df['shorthandedPoints'].sum() - df['shorthandedGoals'].sum()),
                         }
@@ -299,12 +282,7 @@ if st.session_state.players:
                             
                         distribution_summaries.append(dist_data)
 
-                    # --- Linear Logic (Cumulative / Pace) ---
                     else:
-                        # Calculate metric value per game
-                        # Then cumulative sum
-                        # Then projection
-                        
                         vals = []
                         
                         for _, row in df.iterrows():
@@ -318,42 +296,35 @@ if st.session_state.players:
                             elif selected_metric_id == 'esToi': val = max(0, row['toi_val'] - row['pp_toi_val'] - row['sh_toi_val'])
                             elif selected_metric_id == 'evenStrengthPoints': val = row['points'] - (row['powerPlayPoints'] + row['shorthandedPoints'])
                             
-                            # Complex accumulator logic needed for percentages
                             vals.append(val)
                         
                         df['stat_val'] = vals
                         
-                        # Running Totals for Rate Stats
                         df['cum_val'] = df['stat_val'].cumsum()
                         df['cum_goals'] = df['goals'].cumsum()
                         df['cum_shots'] = df['shots'].cumsum()
                         df['cum_points'] = df['points'].cumsum()
                         df['cum_pp_sh_pts'] = (df['powerPlayPoints'] + df['shorthandedPoints']).cumsum()
                         
-                        # Calculate final Y based on mode
                         y_values = []
-                        rolling_values = [] # For rolling average
                         
                         for idx, row in df.iterrows():
                             gp = row['game_number']
                             res = 0
                             
-                            # Base Cumulative/Current State Calculation
                             if selected_metric_id == 'shootingPct':
                                 res = (row['cum_goals'] / row['cum_shots'] * 100) if row['cum_shots'] > 0 else 0
                             elif selected_metric_id == 'evenStrengthPct':
                                 res = ((row['cum_points'] - row['cum_pp_sh_pts']) / row['cum_points'] * 100) if row['cum_points'] > 0 else 0
                             elif selected_metric_id in ['toi', 'esToi']:
-                                res = row['cum_val'] / gp # Avg so far
+                                res = row['cum_val'] / gp 
                             elif selected_metric_id == 'shots' and mode_key == 'projection':
-                                res = row['cum_val'] / gp # Shots per game
+                                res = row['cum_val'] / gp 
                             else:
-                                res = row['cum_val'] # Simple Count
+                                res = row['cum_val'] 
                             
-                            # Apply Mode Transform
                             final_val = res
                             if mode_key == 'projection':
-                                # Only count stats get multiplied by 82. Rates (%, avg, per game) stay as is.
                                 is_rate = selected_metric_id in ['shootingPct', 'evenStrengthPct', 'toi', 'esToi', 'shots']
                                 if not is_rate:
                                     final_val = (res / gp) * 82
@@ -365,9 +336,7 @@ if st.session_state.players:
                         df['color'] = COLORS[i]
                         df['season_label'] = format_season(p['selected_season'])
                         
-                        # Rolling Calculation (Last 10)
                         if mode_key == 'projection':
-                            # We need rolling 10 of the inputs, then calc stat, then project
                             roll_y = []
                             for idx in range(len(df)):
                                 if idx < 9:
@@ -376,7 +345,6 @@ if st.session_state.players:
                                 
                                 slice_df = df.iloc[idx-9 : idx+1]
                                 
-                                # Sums over last 10
                                 s_val = slice_df['stat_val'].sum()
                                 s_goals = slice_df['goals'].sum()
                                 s_shots = slice_df['shots'].sum()
@@ -391,11 +359,10 @@ if st.session_state.players:
                                 elif selected_metric_id in ['toi', 'esToi']:
                                     r_res = s_val / 10
                                 elif selected_metric_id == 'shots':
-                                    r_res = s_val / 10 # Shots per game
+                                    r_res = s_val / 10 
                                 else:
-                                    r_res = s_val # Raw count over 10 games
+                                    r_res = s_val 
                                 
-                                # Project
                                 r_final = r_res
                                 is_rate = selected_metric_id in ['shootingPct', 'evenStrengthPct', 'toi', 'esToi', 'shots']
                                 if not is_rate:
@@ -407,22 +374,18 @@ if st.session_state.players:
 
                         all_dfs.append(df)
 
-            # --- Visualizing ---
-            
             if mode_key == 'distribution':
-                # Donut Charts using Plotly
                 cols = st.columns(len(distribution_summaries))
                 for idx, dist in enumerate(distribution_summaries):
                     with cols[idx]:
                         st.subheader(f"{dist['name']}")
                         st.caption(f"Season: {dist['season']}")
                         
-                        # Create Donut
                         fig = go.Figure(data=[go.Pie(
                             labels=dist['labels'],
                             values=dist['values'],
                             hole=.6,
-                            marker_colors=[dist['color'], '#334155', '#94a3b8'], # Main, Dark, Light-ish
+                            marker_colors=[dist['color'], '#334155', '#94a3b8'],
                             textinfo='label+percent',
                             hoverinfo='label+value+percent'
                         )])
@@ -436,21 +399,18 @@ if st.session_state.players:
                         )
                         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                         
-                        # Data Table below
                         data_rows = []
                         for l, v in zip(dist['labels'], dist['values']):
                             data_rows.append({"Category": l, "Value": f"{v:.1f}{selected_unit}"})
                         st.dataframe(pd.DataFrame(data_rows), hide_index=True, use_container_width=True)
 
             else:
-                # Line Chart
                 if not all_dfs:
                     st.warning("No game data available for selected parameters.")
                 else:
                     fig = go.Figure()
                     
                     for i, df in enumerate(all_dfs):
-                        # Main Line
                         fig.add_trace(go.Scatter(
                             x=df['game_number'],
                             y=df['y_final'],
@@ -459,7 +419,6 @@ if st.session_state.players:
                             line=dict(color=df['color'][0], width=3)
                         ))
                         
-                        # Rolling Line (if projection)
                         if mode_key == 'projection':
                             fig.add_trace(go.Scatter(
                                 x=df['game_number'],
@@ -488,9 +447,10 @@ if st.session_state.players:
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Data explorer expander
                     with st.expander("View Raw Data"):
-                        combined = pd.concat(all_dfs)[['player_name', 'game_number', 'y_final', 'y_rolling'] if mode_key == 'projection' else ['player_name', 'game_number', 'y_final']]
+                        cols_to_show = ['player_name', 'game_number', 'y_final']
+                        if mode_key == 'projection': cols_to_show.append('y_rolling')
+                        combined = pd.concat(all_dfs)[cols_to_show]
                         st.dataframe(combined, use_container_width=True)
 
 else:
